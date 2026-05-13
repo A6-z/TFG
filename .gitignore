@@ -1,1 +1,4 @@
 .venv
+embeddings/
+old_embeddings/
+data/
