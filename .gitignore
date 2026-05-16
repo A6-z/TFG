@@ -2,3 +2,8 @@
 embeddings/
 old_embeddings/
 data/
+logs/
+results/
+
+src/EDA.ipynb
+src/test.ipynb

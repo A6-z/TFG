@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+import torch.nn.functional
 from datetime import datetime
 from transformers import AutoModel, AutoTokenizer
 
@@ -84,6 +85,7 @@ class EmbeddingProcessor:
                 out = self.model(**enc)
                 mask = enc['attention_mask'].unsqueeze(-1).float()
                 emb = (out.last_hidden_state * mask).sum(1) / mask.sum(1).clamp(min = 1e-9) # mean pool embeddings 
+                emb = torch.nn.functional.normalize(emb, p=2, dim=1) # L2 normalize
                 embs.append(emb.cpu().numpy())
             
         # turn int matrix
