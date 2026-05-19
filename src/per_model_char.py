@@ -1,7 +1,6 @@
 import json
 import umap
 import hdbscan
-import argparse
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -169,14 +168,20 @@ class EmbeddingCharPerSpace:
         # save everything in json format:
         results = {
             "effective_dimensions": int(effective_dimensions),
-            "cosine_similarity_mean": float(mean_cos_sim),
-            "cosine_similarity_std": float(std_cos_sim),
+            "cosine_similarity": {
+                "mean": float(mean_cos_sim),
+                "std": float(std_cos_sim),
+            },
             "number_of_clusters": int(n_clusters),
             "noise_fraction": float(noise_fraction),
-            "persistence_mean": float(mean_persistence),
-            "persistence_std": float(std_persistence),
-            "intracluster_cosine_similarity_mean": float(mean_cluster_sim),
-            "intracluster_cosine_similarity_std": float(std_cluster_sim),
+            "persistence": {
+                "mean": float(mean_persistence),
+                "std": float(std_persistence)
+            },
+            "intercluster_cosine_similarity": {
+                "mean": float(mean_cluster_sim),
+                "std": float(std_cluster_sim),
+            },
             "local_intrinsic_dimensionality": float(mean_lid),
         }
         
@@ -205,7 +210,7 @@ if __name__ == "__main__":
    
     # paths
     embs_path = Path("/gpfs/projects/bsc14/mouhida/TFG/embeddings")
-    results_path = Path("/gpfs/projects/bsc14/mouhida/TFG/results")
+    results_path = Path("/gpfs/projects/bsc14/mouhida/TFG/results/per_model")
     results_path.mkdir(parents = True, exist_ok = True)
    
     for model_path in embs_path.iterdir():
@@ -242,7 +247,7 @@ if __name__ == "__main__":
 
             # out dir
             output_path = results_path / model_name 
-            output_path.mkdir(parents = True, exist_ok = True)
+            output_path.mkdir(parents = False, exist_ok = True)
             
             # save results as json
             with open(output_path / f"results_{lang}.json", "w") as f:
