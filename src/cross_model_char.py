@@ -3,14 +3,59 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 from itertools import combinations
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import normalize
 
 class EmbeddingCharCrossModel:
     def __init__(self, embs_model1: np.ndarray, embs_model2: np.ndarray):
         
-        # model embeddings
-        self.A = embs_model1
-        self.B = embs_model2
-                
+        # ensure L2 normalization, and check dimenisonality
+        # -- embeddings A --
+        norms = np.linalg.norm(embs_model1, axis = 1)
+        if not np.allclose(norms, 1.0, atol = 1e-5):
+            raise ValueError(
+                f"Embeddings must be L2-normalized; got norms in "
+                f"[{norms.min():.6f}, {norms.max():.6f}]"
+            )
+
+        # -- embedding B --
+        norms = np.linalg.norm(embs_model2, axis = 1)
+        if not np.allclose(norms, 1.0, atol = 1e-5):
+            raise ValueError(
+                f"Embeddings must be L2-normalized; got norms in "
+                f"[{norms.min():.6f}, {norms.max():.6f}]"
+            )
+        
+        # obtain (reduced if necessary) both embedding objects
+        self.A, self.B = self.align_dimensions(embs_model1, embs_model2)
+
+    def align_dimensions(self, matrix_a: np.ndarray, matrix_b: np.ndarray):
+        dim_a = matrix_a.shape[1]
+        dim_b = matrix_b.shape[1]
+
+        if dim_a != dim_b: print("\t[WARNING] EMBEDDING DIMENSIONS DIFFER FOR BOTH MODELS") 
+
+        # initialize PCA with the target dims
+        target_dim = min(dim_a, dim_b)
+        pca = PCA(n_components = target_dim)
+        
+        if dim_a > dim_b:
+            # reduce A to match B
+            matrix_a_red = pca.fit_transform(matrix_a)
+            matrix_a_reduced = normalize(matrix_a_red, norm = 'l2', axis = 1)
+            matrix_b_reduced = matrix_b
+            print(f"\t[WARNING] Reduced 1st matrix to {target_dim}D. Variance kept: {pca.explained_variance_ratio_.sum():.2%}")
+        elif dim_b > dim_a:
+            # Reduce B to match A
+            matrix_b_red = pca.fit_transform(matrix_a)
+            matrix_b_reduced = normalize(matrix_b_red, norm = 'l2', axis = 1)
+            matrix_a_reduced = matrix_a
+            print(f"\t[WARNING] Reduced 2nd matrix to {target_dim}D. Variance kept: {pca.explained_variance_ratio_.sum():.2%}")
+        else:
+            matrix_a_reduced, matrix_b_reduced = matrix_a, matrix_b
+            
+        return matrix_a_reduced, matrix_b_reduced
+
     def procrustes_analysis(self, A: np.ndarray, B: np.ndarray) -> tuple[np.ndarray, dict]:
         '''
         finds optimal rotation matrix to minimize frobeinus norm dist
