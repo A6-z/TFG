@@ -6,6 +6,8 @@ from itertools import combinations
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
 
+#TODO: Add CKA comparisson
+
 class EmbeddingCharCrossModel:
     def __init__(self, embs_model1: np.ndarray, embs_model2: np.ndarray):
         
@@ -30,6 +32,7 @@ class EmbeddingCharCrossModel:
         self.A, self.B = self.align_dimensions(embs_model1, embs_model2)
 
     def align_dimensions(self, matrix_a: np.ndarray, matrix_b: np.ndarray):
+        '''if the two embedding spaces are of different dimensions, the largest dimensionality space is reduced to match the smallest using PCA'''
         dim_a = matrix_a.shape[1]
         dim_b = matrix_b.shape[1]
 
@@ -47,7 +50,7 @@ class EmbeddingCharCrossModel:
             print(f"\t[WARNING] Reduced 1st matrix to {target_dim}D. Variance kept: {pca.explained_variance_ratio_.sum():.2%}")
         elif dim_b > dim_a:
             # Reduce B to match A
-            matrix_b_red = pca.fit_transform(matrix_a)
+            matrix_b_red = pca.fit_transform(matrix_b)
             matrix_b_reduced = normalize(matrix_b_red, norm = 'l2', axis = 1)
             matrix_a_reduced = matrix_a
             print(f"\t[WARNING] Reduced 2nd matrix to {target_dim}D. Variance kept: {pca.explained_variance_ratio_.sum():.2%}")
@@ -164,6 +167,31 @@ class EmbeddingCharCrossModel:
         csls = 2 * sim_matrix - r_S[:, None] - r_T[None, :]
         
         return csls
+    
+    def linear_cka(self, A: np.ndarray, B: np.ndarray) -> float:
+        '''
+        computes Linear Centered Kernel Alignment (CKA) directly in feature space 
+        to maintain O(Nd^2) complexity and prevent memory overflow.
+        '''
+        # mean-center both matrices
+        A_mean = np.mean(A, axis = 0)
+        B_mean = np.mean(B, axis = 0)
+        
+        A_c = A - A_mean
+        B_c = B - B_mean
+
+        # compute the Frobenius norm of the cross-covariance matrix
+        dot_prod = np.linalg.norm(A_c.T @ B_c, ord='fro') ** 2
+        
+        # compute norm factors
+        norm_A = np.linalg.norm(A_c.T @ A_c, ord='fro')
+        norm_B = np.linalg.norm(A_c.T @ B_c, ord='fro')
+
+        # 4. Guard against division by zero in degenerate spaces
+        if norm_A == 0.0 or norm_B == 0.0:
+            return float('nan')
+
+        return float(dot_prod / (norm_A * norm_B))
         
         
     def compute_all_metrics(self):
@@ -172,6 +200,9 @@ class EmbeddingCharCrossModel:
         # copy matrice objects
         A = self.A.copy()
         B = self.B.copy()
+        
+        # compute cka score (since its indiffernet to orthogonality, we can do it first)
+        cka_score = self.linear_cka(A, B)
         
         # align matrix A to sapce B
         A_aligned, procrustes_results = self.procrustes_analysis(A, B)
@@ -191,6 +222,7 @@ class EmbeddingCharCrossModel:
         
         # save results as json
         results = {
+            'cka_score': cka_score,
             'procrustes_results': procrustes_results,
             'pair-wise-sim': {
                 'mean': pw_sim_mean,
@@ -200,6 +232,7 @@ class EmbeddingCharCrossModel:
                 'mean': npw_sim_mean,
                 'std': npw_sim_std,
             },
+            #TODO: add the ration between sims
             'precision_results': precision_results,
             'csls_precision_results': csls_precision_results,
         }

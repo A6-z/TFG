@@ -43,7 +43,11 @@ class EmbeddingProcessor:
         
         # batch size and max len
         self.batch_size = 64
-        self.max_length = 512
+        self.max_length = min(512, self.model.config.max_position_embeddings) # in case max len is < 512
+
+        # guard against tokenizer vocab > model embedding table (clamp OOB ids to UNK)
+        self.vocab_size = self.model.get_input_embeddings().num_embeddings
+        self.unk_id = self.tokenizer.unk_token_id or 0
         
         # set languages
         self.langs = ["cz", "en", "es", "it", "nl", "ro", "sv"]
@@ -80,12 +84,14 @@ class EmbeddingProcessor:
                     batch,
                     padding = True,
                     truncation = True,
+                    max_length = self.max_length,
                     return_tensors = "pt"
                 ).to(self.device)
+                enc["input_ids"] = enc["input_ids"].masked_fill(enc["input_ids"] >= self.vocab_size, self.unk_id)
                 out = self.model(**enc)
                 mask = enc['attention_mask'].unsqueeze(-1).float()
                 emb = (out.last_hidden_state * mask).sum(1) / mask.sum(1).clamp(min = 1e-9) # mean pool embeddings 
-                emb = torch.nn.functional.normalize(emb, p=2, dim=1) # L2 normalize
+                emb = torch.nn.functional.normalize(emb, p = 2, dim = 1) # L2 normalize
                 embs.append(emb.cpu().numpy())
             
         # turn int matrix
